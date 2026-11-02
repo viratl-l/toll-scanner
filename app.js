@@ -1,4 +1,5 @@
 import {parseReceipt,cents,duplicate,total,csv} from './core.js';
+import {prepareImage} from './prepare.js';
 const $=id=>document.getElementById(id); let rows=[],busy=false,worker,stream,timer,lastFrame,stable=0,cooldown=0,cameraGeneration=0;
 const say=s=>$('status').textContent=s;
 function render(){
@@ -27,8 +28,8 @@ async function scan(blob){
   try{bitmap=await createImageBitmap(blob);if(bitmap.width*bitmap.height>50000000)throw Error('ภาพใหญ่เกินไป กรุณาลดขนาด');const canvas=document.createElement('canvas'),scale=Math.min(1,2200/Math.max(bitmap.width,bitmap.height));canvas.width=Math.round(bitmap.width*scale);canvas.height=Math.round(bitmap.height*scale);canvas.getContext('2d').drawImage(bitmap,0,0,canvas.width,canvas.height);const w=await getWorker();const result=await w.recognize(canvas);const row={...parseReceipt(result.data.text),hash,checked:false};row.duplicate=duplicate(row,rows);rows.push(row);render();say('อ่านแล้ว กรุณาตรวจและยืนยันข้อมูล');canvas.width=canvas.height=0;}
   finally{bitmap?.close();URL.revokeObjectURL(url);}
 }
-async function batch(files){if(busy){say('กำลังอ่านภาพก่อนหน้า กรุณารอสักครู่');return;}busy=true;$('progress').hidden=false;try{for(const file of files){try{if(file.size>25*1024*1024)throw Error('ภาพเกิน 25 MB กรุณาลดขนาด');await scan(file);}catch(e){say(e.message||'อ่านภาพไม่ได้ ลอง JPEG/PNG หรือเพิ่มเอง');}}}finally{busy=false;$('progress').hidden=true;}}
-for(const id of ['files','capture'])$(id).onchange=async e=>{const files=[...e.target.files];e.target.value='';await batch(files);};
+async function batch(files,prepare=false){if(busy){say('กำลังอ่านภาพก่อนหน้า กรุณารอสักครู่');return;}busy=true;try{for(const file of files){try{if(file.size>25*1024*1024)throw Error('ภาพเกิน 25 MB กรุณาลดขนาด');const images=prepare?await prepareImage(file):[file];$('progress').hidden=false;for(const image of images)await scan(image);$('progress').hidden=true;}catch(e){say(e.message||'อ่านภาพไม่ได้ ลอง JPEG/PNG หรือเพิ่มเอง');}}}finally{busy=false;$('progress').hidden=true;}}
+for(const id of ['files','capture'])$(id).onchange=async e=>{const files=[...e.target.files];e.target.value='';await batch(files,true);};
 $('manual').onclick=()=>{rows.push({amount:'',date:'',station:'',receipt:'',checked:false});render();};
 $('clear').onclick=()=>{if(confirm('ล้างรายการทั้งหมด? จะกู้คืนไม่ได้')){rows=[];render();say('ล้างรายการแล้ว');}};
 $('export').onclick=()=>{const url=URL.createObjectURL(new Blob([csv(rows)],{type:'text/csv;charset=utf-8'})),a=document.createElement('a');a.href=url;a.download='toll-receipts.csv';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);};
