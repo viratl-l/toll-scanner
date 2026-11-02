@@ -1,4 +1,4 @@
-import {cents,digits} from './core.js?v=4.0';
+import {cents,digits} from './core.js?v=4.1';
 export const linesOf=data=>data.lines|| (data.blocks||[]).flatMap(b=>(b.paragraphs||[]).flatMap(p=>p.lines||[]));
 const boxUnion=items=>({x0:Math.min(...items.map(x=>x.bbox.x0)),y0:Math.min(...items.map(x=>x.bbox.y0)),x1:Math.max(...items.map(x=>x.bbox.x1)),y1:Math.max(...items.map(x=>x.bbox.y1))});
 const height=b=>Math.max(1,b.y1-b.y0),cx=b=>(b.x0+b.x1)/2,cy=b=>(b.y0+b.y1)/2;
@@ -16,7 +16,7 @@ export function amountEvidence(data,width,pass=0){
     else if(/price|pice|ราคา/i.test(text))kind='price';else continue;
     const labelWords=(line.words||[]).filter(w=>kind==='total'?/^total$/i.test(w.text):kind==='included'?/vat|ncluded/i.test(w.text):!/^\d[\d,.]*$/.test(digits(w.text)));
     if(!labelWords.length)continue;const b=boxUnion(labelWords),lh=height(b),labelConfidence=labelWords.reduce((n,w)=>n+w.confidence,0)/labelWords.length;
-    const nearby=nums.filter(n=>n.bbox.x0>=b.x1-lh*.35&&n.bbox.x0-b.x1<Math.min(width*.38,lh*24)&&Math.abs(cy(n.bbox)-cy(b))<=Math.max(lh*2,height(n.bbox)*1.4)).sort((a,c)=>{
+    const nearby=nums.filter(n=>(kind!=='included'||/^\d[\d,]*\.\d{2}$/.test(digits(n.text)))&&n.bbox.x0>=b.x1-lh*.35&&n.bbox.x0-b.x1<Math.min(width*.38,lh*24)&&Math.abs(cy(n.bbox)-cy(b))<=Math.max(lh*2,height(n.bbox)*1.4)).sort((a,c)=>{
       const distance=n=>Math.abs(cy(n.bbox)-cy(b))/lh*4+Math.max(0,n.bbox.x0-b.x1)/lh*.15;return distance(a)-distance(c);
     });
     if(!nearby.length)continue;const number=nearby[0],nh=height(number.bbox);

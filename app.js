@@ -1,6 +1,6 @@
-import {parseReceipt,cents,total,csv,recalculate} from './core.js?v=4.0';
+import {parseReceipt,cents,total,csv,recalculate} from './core.js?v=4.1';
 import {prepareImage} from './prepare.js';
-import {readReceiptImage} from './ocr.js?v=4.0';
+import {readReceiptImage} from './ocr.js?v=4.1';
 const $=id=>document.getElementById(id);
 let rows=[],busy=false,worker,stream,timer,lastFrame,stable=0,cooldown=0,cameraGeneration=0;
 const money=n=>new Intl.NumberFormat('th-TH',{style:'currency',currency:'THB'}).format(n/100);

@@ -10,3 +10,12 @@ test('repeated EXAT included and total are a single payment',()=>{const data={li
 test('disagreement at the same amount location never becomes an automatic total',()=>{const a={lines:[line(word('Total',10,100),word('20.00',250,100,80))]},b={lines:[line(word('Total',10,100),word('80.00',250,100,80))]};const out=resolveEvidence([...amountEvidence(a,1000,0),...amountEvidence(b,1000,1)],1000,800);assert.ok(out.every(x=>!x.trusted));assert.equal(recalculate(out.map(x=>({amount:(x.value/100).toFixed(2),needsReview:!x.trusted}))),0);});
 test('low confidence and unlabeled numbers never become tolls',()=>{const data={lines:[line(word('Total',10,100),word('500.00',250,100,80,20,30)),line(word('1543',100,400))]};assert.deepEqual(resolveEvidence(amountEvidence(data,1000),1000,800),[]);assert.deepEqual(amountEvidence({lines:[]},1000),[]);});
 test('upright semantic labels outrank random OCR',()=>{assert.ok(orientationScore({text:'Total Baht Included Receipt',confidence:60})>orientationScore({text:'5 3 8 ===',confidence:80}));});
+test('three receipts survive disagreement between image scales, including equal prices',()=>{
+ const make=(value,x,y,kind,pass)=>({value,bbox:{x0:x,y0:y,x1:x+90,y1:y+35},kind,pass,numberConfidence:96,labelConfidence:92,unit:false});
+ const evidence=[make(2000,500,1200,'included','original-scale'),make(5500,1700,1300,'included','original-scale'),make(2000,2200,1250,'included','original-scale'),make(2000,2200,1600,'total','original-scale'),make(5500,1700,1300,'included','11'),make(2000,2200,1250,'included','11'),make(2000,2200,1600,'total','11'),make(2000,500,1200,'included','6')];
+ const out=resolveEvidence(evidence,2800,2100);assert.equal(out.length,3);assert.ok(out.every(x=>x.trusted));assert.equal(out.reduce((n,x)=>n+x.value,0),9500);
+});
+test('VAT-included label never borrows class or lane integer from nearby lines',()=>{
+ const data={lines:[line(word('Baht(Vat',10,100,100),word('Included)',120,100,90)),line(word('3',250,95,20,20,95))]};
+ assert.deepEqual(amountEvidence(data,1000),[]);
+});
