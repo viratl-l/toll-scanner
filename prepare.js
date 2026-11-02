@@ -1,37 +1,32 @@
-// Images and crops exist only in memory; nothing is uploaded or persisted.
-export async function prepareImage(file) {
+// The optional photo editor works entirely in memory.
+export async function prepareImage(file,{index=1,count=1}={}) {
   const bitmap=await createImageBitmap(file);
-  if(bitmap.width*bitmap.height>50000000){bitmap.close();throw Error('ภาพใหญ่เกินไป กรุณาลดขนาด');}
+  if(bitmap.width*bitmap.height>50000000){bitmap.close();throw Error('รูปใหญ่เกินไป กรุณาลดขนาด');}
   return new Promise(resolve=>{
-    const dialog=document.createElement('dialog');dialog.className='image-editor';
-    dialog.innerHTML=`<h2>จัดภาพก่อนอ่าน</h2><p>หมุนให้ตัวหนังสือตั้งตรง แล้วลากกรอบให้ครอบใบเสร็จ 1 ใบ กดเพิ่มกรอบ ทำซ้ำจนครบทุกใบในภาพนี้</p><div class="actions"><button type="button" data-action="left" class="secondary">↶ หมุนซ้าย 90°</button><button type="button" data-action="right" class="secondary">↷ หมุนขวา 90°</button></div><canvas aria-label="ลากเลือกกรอบใบเสร็จ" tabindex="0"></canvas><div class="crop-fields"></div><p class="crop-status" role="status" aria-live="polite"></p><div class="actions"><button type="button" data-action="add">เพิ่มกรอบใบเสร็จนี้</button><button type="button" data-action="reset" class="secondary">เลือกเต็มภาพ</button><button type="button" data-action="done">อ่านกรอบที่เพิ่ม (0)</button><button type="button" data-action="skip" class="secondary">ข้ามภาพนี้</button></div><small>หากมีใบเดียว เลือกเต็มภาพ → เพิ่มกรอบ → อ่านกรอบที่เพิ่ม กรอบยังไม่แก้ความเอียงหรือมุม perspective ให้ตรวจยอดทุกครั้ง</small>`;
-    const canvas=dialog.querySelector('canvas'),ctx=canvas.getContext('2d'),source=document.createElement('canvas'),src=source.getContext('2d');
-    const status=dialog.querySelector('.crop-status'),done=dialog.querySelector('[data-action=done]');
-    let turn=0,rect={x:0,y:0,w:100,h:100},start=null,crops=[],closed=false;
-    const inputs={};
-    for(const [key,label] of [['x','ซ้าย (%)'],['y','บน (%)'],['w','กว้าง (%)'],['h','สูง (%)']]){
-      const l=document.createElement('label');l.textContent=label;const input=document.createElement('input');input.type='number';input.min='0';input.max='100';input.step='0.1';input.value=rect[key];input.oninput=()=>{rect[key]=Math.max(0,Math.min(100,Number(input.value)||0));draw();};l.append(input);dialog.querySelector('.crop-fields').append(l);inputs[key]=input;
-    }
-    function normalized(){return {x:rect.x,y:rect.y,w:Math.min(rect.w,100-rect.x),h:Math.min(rect.h,100-rect.y)};}
-    function draw(){const r=normalized();ctx.clearRect(0,0,canvas.width,canvas.height);ctx.drawImage(source,0,0,canvas.width,canvas.height);ctx.fillStyle='#0007';ctx.fillRect(0,0,canvas.width,canvas.height);ctx.drawImage(source,r.x*source.width/100,r.y*source.height/100,r.w*source.width/100,r.h*source.height/100,r.x*canvas.width/100,r.y*canvas.height/100,r.w*canvas.width/100,r.h*canvas.height/100);ctx.strokeStyle='#16e9b0';ctx.lineWidth=3;ctx.strokeRect(r.x*canvas.width/100,r.y*canvas.height/100,r.w*canvas.width/100,r.h*canvas.height/100);}
-    function sync(){for(const k in inputs)inputs[k].value=rect[k].toFixed(1);draw();}
-    function rotate(delta){turn=(turn+delta+4)%4;const scale=Math.min(1,3000/Math.max(bitmap.width,bitmap.height));const w=Math.round(bitmap.width*scale),h=Math.round(bitmap.height*scale);source.width=turn%2?h:w;source.height=turn%2?w:h;src.save();src.translate(source.width/2,source.height/2);src.rotate(turn*Math.PI/2);src.drawImage(bitmap,-w/2,-h/2,w,h);src.restore();canvas.width=Math.min(1000,source.width);canvas.height=Math.round(source.height*canvas.width/source.width);rect={x:0,y:0,w:100,h:100};sync();}
-    function point(e){const b=canvas.getBoundingClientRect();return {x:Math.max(0,Math.min(100,(e.clientX-b.left)/b.width*100)),y:Math.max(0,Math.min(100,(e.clientY-b.top)/b.height*100))};}
-    canvas.onpointerdown=e=>{start=point(e);canvas.setPointerCapture(e.pointerId);};
-    canvas.onpointermove=e=>{if(!start)return;const end=point(e);rect={x:Math.min(start.x,end.x),y:Math.min(start.y,end.y),w:Math.abs(end.x-start.x),h:Math.abs(end.y-start.y)};sync();};
-    canvas.onpointerup=canvas.onpointercancel=()=>{start=null;};
-    function finish(result){if(closed)return;closed=true;bitmap.close();source.width=source.height=canvas.width=canvas.height=0;crops=[];dialog.close();dialog.remove();resolve(result);}
-    dialog.oncancel=e=>{e.preventDefault();finish([]);};
-    dialog.querySelector('[data-action=left]').onclick=()=>rotate(-1);
-    dialog.querySelector('[data-action=right]').onclick=()=>rotate(1);
-    dialog.querySelector('[data-action=reset]').onclick=()=>{rect={x:0,y:0,w:100,h:100};sync();};
-    dialog.querySelector('[data-action=skip]').onclick=()=>finish([]);
-    dialog.querySelector('[data-action=add]').onclick=async()=>{
-      const r=normalized();if(r.w<2||r.h<2){status.textContent='กรอบเล็กเกินไป กรุณาเลือกใหม่';return;}if(crops.length>=20){status.textContent='เพิ่มได้สูงสุด 20 กรอบต่อภาพ';return;}
-      const c=document.createElement('canvas');c.width=Math.round(source.width*r.w/100);c.height=Math.round(source.height*r.h/100);c.getContext('2d').drawImage(source,source.width*r.x/100,source.height*r.y/100,source.width*r.w/100,source.height*r.h/100,0,0,c.width,c.height);
-      const blob=await new Promise(res=>c.toBlob(res,'image/png'));c.width=c.height=0;if(closed||!blob)return;crops.push(blob);status.textContent=`เพิ่มแล้ว ${crops.length} กรอบ เลือกใบถัดไป หรือกดอ่านกรอบที่เพิ่ม`;done.textContent=`อ่านกรอบที่เพิ่ม (${crops.length})`;done.disabled=false;
-    };
-    done.disabled=true;done.onclick=()=>finish([...crops]);
+    const dialog=document.createElement('dialog');dialog.className='image-editor';dialog.setAttribute('aria-label','ปรับรูปใบเสร็จ');
+    dialog.innerHTML=`<div class="editor-head"><div><h2>ปรับรูปใบเสร็จ</h2><small>รูปที่ ${index} จาก ${count}</small></div><button class="editor-close" aria-label="ข้ามรูปนี้">×</button></div><div class="editor-modes"><button data-mode="one" aria-pressed="true">ใบเดียวในรูป</button><button data-mode="many" aria-pressed="false">หลายใบในรูป</button></div><p class="editor-instruction">หมุนให้ตัวหนังสือตั้งตรง แล้วกดสแกนได้เลย</p><div class="editor-stage"><canvas tabindex="0" aria-label="รูปใบเสร็จ เลือกกรอบโดยลากหรือแตะสองมุม"></canvas></div><div class="rotate-tools"><button data-action="left">↶ หมุนซ้าย</button><button data-action="right">↷ หมุนขวา</button></div><div class="editor-secondary-controls" hidden><button class="text-button" data-action="reset">เลือกกรอบใหม่</button></div><div class="crop-strip" aria-label="ใบเสร็จที่เลือกแล้ว" hidden></div><p class="editor-status" role="status" aria-live="polite"></p><div class="editor-footer"><span>รูปอยู่ในเครื่องคุณเท่านั้น</span><div class="actions"><button data-action="add" class="secondary" hidden disabled>＋ เพิ่มใบนี้</button><button data-action="done">สแกนและบวกยอด</button></div></div>`;
+    const q=s=>dialog.querySelector(s),canvas=q('canvas'),ctx=canvas.getContext('2d'),source=document.createElement('canvas'),src=source.getContext('2d');
+    let turn=0,multi=false,rect=null,start=null,tap=null,crops=[],closed=false,saving=false;
+    const full={x:0,y:0,w:100,h:100};
+    function draw(){ctx.clearRect(0,0,canvas.width,canvas.height);ctx.drawImage(source,0,0,canvas.width,canvas.height);if(multi&&rect){const r=rect,x=r.x*canvas.width/100,y=r.y*canvas.height/100,w=r.w*canvas.width/100,h=r.h*canvas.height/100;ctx.fillStyle='#0b251d88';ctx.fillRect(0,0,canvas.width,canvas.height);ctx.drawImage(source,r.x*source.width/100,r.y*source.height/100,r.w*source.width/100,r.h*source.height/100,x,y,w,h);ctx.strokeStyle='#50e7a0';ctx.lineWidth=3;ctx.strokeRect(x,y,w,h);}q('[data-action=add]').disabled=saving||!rect||rect.w<2||rect.h<2;}
+    function rotate(delta){turn=(turn+delta+4)%4;const scale=Math.min(1,3000/Math.max(bitmap.width,bitmap.height)),w=Math.round(bitmap.width*scale),h=Math.round(bitmap.height*scale);source.width=turn%2?h:w;source.height=turn%2?w:h;src.save();src.translate(source.width/2,source.height/2);src.rotate(turn*Math.PI/2);src.drawImage(bitmap,-w/2,-h/2,w,h);src.restore();canvas.width=Math.min(1200,source.width);canvas.height=Math.round(source.height*canvas.width/source.width);rect=null;tap=null;draw();}
+    function setMode(value){multi=value;q('[data-mode=one]').setAttribute('aria-pressed',!multi);q('[data-mode=many]').setAttribute('aria-pressed',multi);q('.editor-stage').classList.toggle('multi',multi);q('.editor-instruction').textContent=multi?'ลากกรอบรอบใบเสร็จทีละใบ แล้วกด “เพิ่มใบนี้” (หรือแตะมุมบนซ้ายและมุมล่างขวา)':'หมุนให้ตัวหนังสือตั้งตรง แล้วกดสแกนได้เลย';q('[data-action=add]').hidden=!multi;q('.editor-secondary-controls').hidden=!multi;q('.crop-strip').hidden=!multi;rect=null;tap=null;updateCrops();draw();}
+    function updateCrops(){const strip=q('.crop-strip');strip.replaceChildren();crops.forEach((crop,i)=>{const item=document.createElement('div');item.className='crop-thumb';const img=document.createElement('img');img.src=crop.url;img.alt=`ใบเสร็จที่ ${i+1}`;const label=document.createElement('span');label.textContent=`ใบที่ ${i+1}`;const remove=document.createElement('button');remove.textContent='×';remove.setAttribute('aria-label',`เอาใบที่ ${i+1} ออก`);remove.onclick=()=>{URL.revokeObjectURL(crop.url);crops.splice(i,1);updateCrops();};item.append(img,remove,label);strip.append(item);});q('[data-action=done]').textContent=multi?`บวกยอด ${crops.length} ใบ`:'สแกนและบวกยอด';q('[data-action=done]').disabled=saving||(multi&&!crops.length);}
+    function point(e){const b=canvas.getBoundingClientRect();return{x:Math.max(0,Math.min(100,(e.clientX-b.left)/b.width*100)),y:Math.max(0,Math.min(100,(e.clientY-b.top)/b.height*100))};}
+    function select(a,b){rect={x:Math.min(a.x,b.x),y:Math.min(a.y,b.y),w:Math.abs(a.x-b.x),h:Math.abs(a.y-b.y)};draw();}
+    canvas.onpointerdown=e=>{if(!multi||saving)return;start=point(e);canvas.setPointerCapture(e.pointerId);};
+    canvas.onpointermove=e=>{if(start)select(start,point(e));};
+    canvas.onpointerup=e=>{if(!start)return;const end=point(e);if(Math.abs(end.x-start.x)+Math.abs(end.y-start.y)<2){if(tap){select(tap,end);tap=null;}else{tap=end;q('.editor-status').textContent='แตะมุมตรงข้ามของใบเสร็จ';}}else{select(start,end);tap=null;q('.editor-status').textContent='กรอบพร้อมแล้ว กด “เพิ่มใบนี้”';}start=null;};
+    canvas.onpointercancel=()=>{start=null;};
+    canvas.onkeydown=e=>{if(!multi||!['ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(e.key))return;e.preventDefault();rect??={x:10,y:10,w:40,h:70};const delta=e.key==='ArrowLeft'||e.key==='ArrowUp'?-1:1;const key=e.key==='ArrowLeft'||e.key==='ArrowRight'?(e.shiftKey?'w':'x'):(e.shiftKey?'h':'y');rect[key]+=delta;rect.x=Math.max(0,Math.min(rect.x,98));rect.y=Math.max(0,Math.min(rect.y,98));rect.w=Math.max(2,Math.min(rect.w,100-rect.x));rect.h=Math.max(2,Math.min(rect.h,100-rect.y));draw();};
+    async function cropBlob(r){const c=document.createElement('canvas');c.width=Math.round(source.width*r.w/100);c.height=Math.round(source.height*r.h/100);c.getContext('2d').drawImage(source,r.x*source.width/100,r.y*source.height/100,source.width*r.w/100,source.height*r.h/100,0,0,c.width,c.height);const blob=await new Promise(res=>c.toBlob(res,'image/png'));c.width=c.height=0;if(!blob)throw Error('เตรียมรูปไม่สำเร็จ กรุณาลองใหม่');return blob;}
+    function finish(result){if(closed)return;closed=true;bitmap.close();for(const crop of crops)URL.revokeObjectURL(crop.url);crops=[];source.width=source.height=canvas.width=canvas.height=0;dialog.close();dialog.remove();resolve(result);}
+    q('.editor-close').onclick=()=>finish([]);dialog.oncancel=e=>{e.preventDefault();finish([]);};
+    q('[data-mode=one]').onclick=()=>setMode(false);q('[data-mode=many]').onclick=()=>setMode(true);
+    q('[data-action=left]').onclick=()=>{if(!saving)rotate(-1);};q('[data-action=right]').onclick=()=>{if(!saving)rotate(1);};
+    q('[data-action=reset]').onclick=()=>{rect=null;tap=null;draw();};
+    q('[data-action=add]').onclick=async()=>{if(saving||!rect)return;if(crops.length>=20){q('.editor-status').textContent='เลือกได้สูงสุด 20 ใบต่อรูป';return;}saving=true;draw();updateCrops();try{const blob=await cropBlob({...rect});if(closed)return;crops.push({blob,url:URL.createObjectURL(blob)});rect=null;tap=null;q('.editor-status').textContent=`เลือกแล้ว ${crops.length} ใบ เลือกใบถัดไปหรือกดบวกยอดได้เลย`;}catch(e){q('.editor-status').textContent=e.message;}finally{saving=false;if(!closed){draw();updateCrops();}}};
+    q('[data-action=done]').onclick=async()=>{if(saving)return;if(multi){finish(crops.map(x=>x.blob));return;}saving=true;updateCrops();try{const blob=await cropBlob(full);if(!closed)finish([blob]);}catch(e){q('.editor-status').textContent=e.message;saving=false;updateCrops();}};
     document.body.append(dialog);rotate(0);dialog.showModal();
   });
 }

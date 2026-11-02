@@ -22,6 +22,11 @@ export function duplicate(row, rows) {
   if (row.receipt && row.date && rows.some(x=>x.receipt===row.receipt && x.date===row.date && x.station===row.station)) return 'เลขใบเสร็จและวันเดียวกัน';
   return '';
 }
+export function recalculate(rows) {
+  const seen=[];
+  for(const row of rows){row.duplicate=row.allowDuplicate?'':duplicate(row,seen);row.checked=!row.duplicate&&cents(row.amount)>0;seen.push(row);}
+  return total(rows);
+}
 export function total(rows) { return rows.filter(x=>x.checked && !x.duplicate).reduce((n,x)=>n+(cents(x.amount)??0),0); }
 export function csv(rows) {
   const cell = v => '"'+String(v??'').replace(/^[=+@\-\t\r]/,"'$&").replace(/"/g,'""')+'"';
