@@ -7,7 +7,7 @@ const say=s=>$('status').textContent=s;
 const el=(tag,className,text)=>{const node=document.createElement(tag);if(className)node.className=className;if(text!==undefined)node.textContent=text;return node;};
 function updateSummary(){
   const included=rows.filter(x=>x.checked&&!x.duplicate),missing=rows.filter(x=>!x.checked&&!x.duplicate).length,dupes=rows.filter(x=>x.duplicate).length;
-  $('total').textContent=money(total(rows));$('count').textContent=included.length+' ใบเสร็จ';$('rowCount').textContent=rows.length;
+  $('total').textContent=money(total(rows));$('mobileTotal').textContent=money(total(rows));$('count').textContent=included.length+' ใบเสร็จ';$('rowCount').textContent=rows.length;
   $('export').disabled=!included.length;$('clear').disabled=busy||!rows.length;
   $('pending').textContent=!rows.length?'เพิ่มใบเสร็จเพื่อเริ่มรวมยอด':[missing?`ยังไม่ได้ยอด ${missing} ใบ`:'บวกยอดให้แล้ว แก้ตัวเลขได้เสมอ',dupes?`กันรายการอาจซ้ำ ${dupes} ใบ`:null].filter(Boolean).join(' · ');
   const step=rows.length?(included.length===rows.length?2:1):0;document.querySelectorAll('.steps li').forEach((li,i)=>li.classList.toggle('active',i===step));
