@@ -24,7 +24,7 @@ export function duplicate(row, rows) {
 }
 export function recalculate(rows) {
   const seen=[];
-  for(const row of rows){row.duplicate=row.allowDuplicate?'':duplicate(row,seen);row.checked=!row.duplicate&&cents(row.amount)>0;seen.push(row);}
+  for(const row of rows){row.duplicate=row.allowDuplicate?'':duplicate(row,seen);row.checked=!row.duplicate&&!row.needsReview&&cents(row.amount)>0;seen.push(row);}
   return total(rows);
 }
 export function total(rows) { return rows.filter(x=>x.checked && !x.duplicate).reduce((n,x)=>n+(cents(x.amount)??0),0); }
